@@ -1,0 +1,25 @@
+name: Deploy shopify_api
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  deploy:
+    name: Deploy to CloudPanel Host
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Deploy via SSH
+        uses: appleboy/ssh-action@v1.2.0
+        with:
+          host: ${{ secrets.HOST }}
+          username: ${{ secrets.USERNAME }}
+          key: ${{ secrets.SSH_KEY }}
+          script: |
+            cd ${{ secrets.APP_DIR }}
+            git pull origin main
+            npm install --omit=dev
+            pm2 restart shopify_api || pm2 start app.js --name shopify_api
+            pm2 save
