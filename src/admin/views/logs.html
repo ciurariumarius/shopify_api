@@ -1,0 +1,48 @@
+<h1>Logs</h1>
+
+<form method="get" action="/admin/logs" class="filters">
+  <div>
+    <label>Shop / actor</label>
+    <input name="shop" value="{{shop}}" placeholder="my-shop.myshopify.com">
+  </div>
+  <div>
+    <label>Sync status</label>
+    <select name="status">
+      <option value="">Any</option>
+      <option value="success">success</option>
+      <option value="error">error</option>
+      <option value="running">running</option>
+    </select>
+  </div>
+  <div>
+    <label>From</label>
+    <input name="from" type="date" value="{{from}}">
+  </div>
+  <div>
+    <label>To</label>
+    <input name="to" type="date" value="{{to}}">
+  </div>
+  <div><button class="btn" type="submit">Filter</button></div>
+  <div><a class="btn btn-sm" href="{{csvLink}}">Export CSV</a></div>
+</form>
+
+<h2 class="section">Audit log</h2>
+<table>
+  <thead>
+    <tr><th>ID</th><th>Action</th><th>Actor</th><th>IP</th><th>Time</th><th>Details</th></tr>
+  </thead>
+  <tbody>
+    {{auditRows}}
+  </tbody>
+</table>
+{{pager}}
+
+<h2 class="section">Product syncs</h2>
+<table>
+  <thead>
+    <tr><th>ID</th><th>Shop</th><th>Status</th><th>Items</th><th>Duration</th><th>Trigger</th><th>Created</th></tr>
+  </thead>
+  <tbody>
+    {{syncRows}}
+  </tbody>
+</table>

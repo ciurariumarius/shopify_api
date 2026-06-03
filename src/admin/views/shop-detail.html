@@ -1,0 +1,41 @@
+<h1>{{domain}}</h1>
+<p><a href="/admin/shops">&larr; Back to shops</a></p>
+
+<table style="max-width:640px">
+  <tbody>
+    <tr><th>Status</th><td>{{status}}</td></tr>
+    <tr><th>Scopes</th><td><code>{{scopes}}</code></td></tr>
+    <tr><th>Installed at</th><td>{{installedAt}}</td></tr>
+    <tr><th>Uninstalled at</th><td>{{uninstalledAt}}</td></tr>
+    <tr><th>Last sync</th><td>{{lastSyncAt}}</td></tr>
+  </tbody>
+</table>
+
+<h2 class="section">Actions</h2>
+<form method="post" action="/admin/shops/{{domainEnc}}/sync" class="inline">
+  <button class="btn" type="submit">Trigger manual sync</button>
+</form>
+<button class="btn btn-danger" onclick="removeShop()">Remove shop</button>
+
+<h2 class="section">Sync history</h2>
+<table>
+  <thead>
+    <tr><th>ID</th><th>Status</th><th>Items</th><th>Duration</th><th>Trigger</th><th>Created</th><th>Error</th></tr>
+  </thead>
+  <tbody>
+    {{syncRows}}
+  </tbody>
+</table>
+
+<script>
+  function removeShop() {
+    if (!confirm('Remove {{domain}} and revoke its token? This cannot be undone.')) return;
+    fetch('/admin/shops/{{domainEnc}}', { method: 'DELETE' })
+      .then((r) => r.json())
+      .then((d) => {
+        if (d.ok) window.location.href = '/admin/shops';
+        else alert('Failed: ' + (d.error || 'unknown error'));
+      })
+      .catch((e) => alert('Request failed: ' + e.message));
+  }
+</script>

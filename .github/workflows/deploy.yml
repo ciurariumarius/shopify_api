@@ -20,6 +20,8 @@ jobs:
           script: |
             cd ${{ secrets.APP_DIR }}
             git pull origin main
-            npm install --omit=dev
-            pm2 restart shopify_api || pm2 start app.js --name shopify_api
+            npm install
+            npx prisma generate
+            npx prisma migrate deploy
+            pm2 startOrReload ecosystem.config.js --env production
             pm2 save

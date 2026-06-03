@@ -1,0 +1,65 @@
+<h1>API Keys</h1>
+
+<h2 class="section">Create a key</h2>
+<form method="post" action="/admin/keys" class="filters">
+  <div>
+    <label>Label</label>
+    <input name="label" placeholder="e.g. Production integration" required>
+  </div>
+  <div>
+    <label>Shop scope (optional — blank = global)</label>
+    <input name="shopDomain" placeholder="my-shop.myshopify.com">
+  </div>
+  <div>
+    <label>Expires at (optional)</label>
+    <input name="expiresAt" type="date">
+  </div>
+  <div><button class="btn" type="submit">Create key</button></div>
+</form>
+
+<h2 class="section">Existing keys</h2>
+<table>
+  <thead>
+    <tr><th>Label</th><th>Scope</th><th>Last used</th><th>Expires</th><th>Status</th><th>Actions</th></tr>
+  </thead>
+  <tbody>
+    {{rows}}
+  </tbody>
+</table>
+
+{{modal}}
+
+<script>
+  function revokeKey(id) {
+    if (!confirm('Revoke this API key? Clients using it will stop working.')) return;
+    fetch('/admin/keys/' + id, { method: 'DELETE' })
+      .then((r) => r.json())
+      .then((d) => { if (d.ok) location.reload(); else alert('Failed: ' + (d.error || 'error')); })
+      .catch((e) => alert('Request failed: ' + e.message));
+  }
+
+  // Show the freshly created key exactly once in a modal.
+  if (window.__newKey) {
+    var bg = document.createElement('div');
+    bg.className = 'modal-bg';
+    bg.innerHTML =
+      '<div class="modal">' +
+      '<h2>API key created</h2>' +
+      '<p>Copy this key now — it will not be shown again.</p>' +
+      '<code id="newkey">' + window.__newKey + '</code>' +
+      '<button class="btn" onclick="copyKey()">Copy</button> ' +
+      '<button class="btn btn-sm" onclick="closeModal()">Done</button>' +
+      '</div>';
+    document.body.appendChild(bg);
+    window.copyKey = function () {
+      navigator.clipboard.writeText(window.__newKey).then(function () {
+        document.querySelector('.modal .btn').textContent = 'Copied!';
+      });
+    };
+    window.closeModal = function () {
+      bg.remove();
+      // Strip the ?created= param so a refresh doesn't re-show the key.
+      history.replaceState(null, '', '/admin/keys');
+    };
+  }
+</script>

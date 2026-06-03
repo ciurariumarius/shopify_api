@@ -1,0 +1,65 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mysql"
+  url      = env("DATABASE_URL")
+}
+
+model Shop {
+  id            Int       @id @default(autoincrement())
+  shopDomain    String    @unique
+  accessToken   String    @db.Text // AES-256-GCM encrypted (iv:authTag:ciphertext)
+  scopes        String
+  installed     Boolean   @default(true)
+  installedAt   DateTime  @default(now())
+  uninstalledAt DateTime?
+  lastSyncAt    DateTime?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+  syncs         ProductSync[]
+  apiKeys       ApiKey[]
+}
+
+model ProductSync {
+  id          Int      @id @default(autoincrement())
+  shopDomain  String
+  status      String // success | error | running
+  totalItems  Int?
+  error       String?  @db.Text
+  durationMs  Int?
+  triggeredBy String   @default("manual") // manual | webhook | scheduled
+  createdAt   DateTime @default(now())
+  shop        Shop     @relation(fields: [shopDomain], references: [shopDomain])
+
+  @@index([shopDomain])
+  @@index([status])
+  @@index([createdAt])
+}
+
+model ApiKey {
+  id         Int       @id @default(autoincrement())
+  key        String    @unique // SHA-256 hashed
+  label      String
+  shopDomain String? // null = global key
+  active     Boolean   @default(true)
+  lastUsedAt DateTime?
+  expiresAt  DateTime?
+  createdAt  DateTime  @default(now())
+  shop       Shop?     @relation(fields: [shopDomain], references: [shopDomain])
+
+  @@index([shopDomain])
+}
+
+model AuditLog {
+  id        Int      @id @default(autoincrement())
+  action    String // install | uninstall | sync | key_create | key_revoke | admin_login | admin_logout
+  actor     String // shopDomain | admin | system
+  details   String?  @db.Text // JSON string
+  ip        String?
+  createdAt DateTime @default(now())
+
+  @@index([action])
+  @@index([createdAt])
+}
