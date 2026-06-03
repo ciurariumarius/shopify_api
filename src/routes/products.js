@@ -40,6 +40,37 @@ router.get('/products', async (req, res) => {
   }
 });
 
+// GET /api/orders?shop=&cursor= — fetch a paginated page of orders (sales data).
+// Returns order totals + line items only; no customer PII.
+router.get('/orders', async (req, res) => {
+  const shop = normalizeShopDomain(req.query.shop);
+  if (!shop) {
+    return res.status(400).json({ error: 'Invalid or missing shop parameter' });
+  }
+
+  // Shop-scoped keys may only access their own shop.
+  if (req.apiKey.shopDomain && req.apiKey.shopDomain !== shop) {
+    return res.status(403).json({ error: 'API key not authorized for this shop' });
+  }
+
+  try {
+    const cursor = req.query.cursor || null;
+    const { orders, pageInfo } = await shopifyGraphql.fetchOrdersPage(shop, cursor);
+    return res.json({
+      shop,
+      count: orders.length,
+      orders,
+      pageInfo,
+    });
+  } catch (err) {
+    logger.error('Order fetch failed', { shop, error: err.message });
+    if (/not installed/i.test(err.message)) {
+      return res.status(404).json({ error: 'Shop not installed' });
+    }
+    return res.status(502).json({ error: 'Failed to fetch orders from Shopify' });
+  }
+});
+
 // GET /api/sync/:id — status of a sync job.
 router.get('/sync/:id', async (req, res) => {
   const id = Number(req.params.id);

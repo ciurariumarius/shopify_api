@@ -90,6 +90,78 @@ async function fetchProductsPage(shop, cursor = null) {
   return { products, pageInfo: connection.pageInfo };
 }
 
+// Orders query — deliberately selects ONLY financial + line-item data.
+// No customer block, email, phone, or addresses are requested, which keeps
+// this within Protected Customer Data "Level 1" (no Level 2 fields).
+const ORDERS_QUERY = `
+  query Orders($cursor: String) {
+    orders(first: 50, after: $cursor, sortKey: CREATED_AT, reverse: true) {
+      pageInfo { hasNextPage endCursor }
+      edges {
+        node {
+          id
+          name
+          createdAt
+          processedAt
+          displayFinancialStatus
+          displayFulfillmentStatus
+          currentTotalPriceSet { shopMoney { amount currencyCode } }
+          subtotalPriceSet { shopMoney { amount currencyCode } }
+          totalTaxSet { shopMoney { amount currencyCode } }
+          totalDiscountsSet { shopMoney { amount currencyCode } }
+          lineItems(first: 100) {
+            edges {
+              node {
+                title
+                sku
+                quantity
+                originalUnitPriceSet { shopMoney { amount currencyCode } }
+                discountedUnitPriceSet { shopMoney { amount currencyCode } }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+`;
+
+// Flatten an order node into a compact, customer-data-free shape.
+function mapOrder(node) {
+  const money = (set) => (set && set.shopMoney ? set.shopMoney.amount : null);
+  const currency = (set) => (set && set.shopMoney ? set.shopMoney.currencyCode : null);
+  return {
+    id: node.id,
+    name: node.name,
+    createdAt: node.createdAt,
+    processedAt: node.processedAt,
+    financialStatus: node.displayFinancialStatus,
+    fulfillmentStatus: node.displayFulfillmentStatus,
+    currency: currency(node.currentTotalPriceSet),
+    total: money(node.currentTotalPriceSet),
+    subtotal: money(node.subtotalPriceSet),
+    tax: money(node.totalTaxSet),
+    discounts: money(node.totalDiscountsSet),
+    lineItems: node.lineItems.edges.map((e) => ({
+      title: e.node.title,
+      sku: e.node.sku,
+      quantity: e.node.quantity,
+      unitPrice: money(e.node.originalUnitPriceSet),
+      discountedUnitPrice: money(e.node.discountedUnitPriceSet),
+    })),
+  };
+}
+
+// Fetch a single page of orders for a shop (cursor-based).
+// Returns { orders, pageInfo }. Contains no customer PII.
+async function fetchOrdersPage(shop, cursor = null) {
+  const accessToken = await getAccessToken(shop);
+  const data = await graphqlRequest(shop, accessToken, ORDERS_QUERY, { cursor });
+  const connection = data.orders;
+  const orders = connection.edges.map((edge) => mapOrder(edge.node));
+  return { orders, pageInfo: connection.pageInfo };
+}
+
 // Fetch ALL products for a shop, paginating cursor-by-cursor with a delay
 // between pages. Records a ProductSync row (running -> success/error).
 async function syncAllProducts(shop, { triggeredBy = 'manual' } = {}) {
@@ -158,8 +230,39 @@ async function syncAllProducts(shop, { triggeredBy = 'manual' } = {}) {
   }
 }
 
+const REGISTER_WEBHOOK_MUTATION = `
+  mutation webhookSubscriptionCreate($topic: WebhookSubscriptionTopic!, $webhookSubscription: WebhookSubscriptionInput!) {
+    webhookSubscriptionCreate(topic: $topic, webhookSubscription: $webhookSubscription) {
+      webhookSubscription { id }
+      userErrors { field message }
+    }
+  }
+`;
+
+// Subscribe a shop to a webhook topic (e.g. APP_UNINSTALLED) pointing at our URL.
+// Idempotent: "already exists / address taken" errors are swallowed so re-installs
+// don't fail. Returns the subscription id, or null if it already existed.
+async function registerWebhook(shop, topic, callbackUrl) {
+  const accessToken = await getAccessToken(shop);
+  const data = await graphqlRequest(shop, accessToken, REGISTER_WEBHOOK_MUTATION, {
+    topic,
+    webhookSubscription: { callbackUrl, format: 'JSON' },
+  });
+
+  const result = data.webhookSubscriptionCreate || {};
+  const errors = (result.userErrors || []).filter(
+    (e) => !/already|taken|exists/i.test(e.message || '')
+  );
+  if (errors.length) {
+    throw new Error(`webhookSubscriptionCreate failed: ${JSON.stringify(errors)}`);
+  }
+  return result.webhookSubscription ? result.webhookSubscription.id : null;
+}
+
 module.exports = {
   API_VERSION,
   fetchProductsPage,
+  fetchOrdersPage,
   syncAllProducts,
+  registerWebhook,
 };

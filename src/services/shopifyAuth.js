@@ -3,6 +3,8 @@ const prisma = require('../db/prisma');
 const logger = require('../utils/logger');
 const { encrypt } = require('./tokenEncryption');
 const auditLog = require('./auditLog');
+const shopifyGraphql = require('./shopifyGraphql');
+const productSync = require('./productSync');
 
 // Build the Shopify OAuth authorization URL to redirect the merchant to.
 function buildAuthorizeUrl(shop, state) {
@@ -69,6 +71,27 @@ async function completeInstall({ shop, code, ip }) {
     details: { scopes },
     ip,
   });
+
+  // Subscribe to app/uninstalled so we learn when the merchant removes the app.
+  // Best-effort: a failure here must not break the install.
+  try {
+    const callbackUrl = `${process.env.APP_URL}/webhooks/app/uninstalled`;
+    await shopifyGraphql.registerWebhook(shop, 'APP_UNINSTALLED', callbackUrl);
+    logger.info('Registered app/uninstalled webhook', { shop });
+  } catch (err) {
+    logger.error('Failed to register app/uninstalled webhook', {
+      shop,
+      error: err.message,
+    });
+  }
+
+  // Kick off an initial product sync in the background so the shop has data
+  // immediately. Fire-and-forget — don't block the post-install redirect.
+  productSync
+    .runSync(shop, { triggeredBy: 'install', actor: shop, ip })
+    .catch((err) =>
+      logger.error('Initial product sync failed', { shop, error: err.message })
+    );
 
   return { shop, scopes };
 }

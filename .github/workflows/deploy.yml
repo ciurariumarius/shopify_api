@@ -18,10 +18,16 @@ jobs:
           username: ${{ secrets.USERNAME }}
           key: ${{ secrets.SSH_KEY }}
           script: |
+            set -e
             cd ${{ secrets.APP_DIR }}
-            git pull origin main
+            # Force the working tree to match remote (server-local edits to tracked
+            # files like package-lock.json would otherwise abort the merge).
+            # .env is gitignored/untracked, so it is left untouched.
+            git fetch origin main
+            git reset --hard origin/main
             npm install
             npx prisma generate
             npx prisma migrate deploy
-            pm2 startOrReload ecosystem.config.js --env production
-            pm2 save
+            # pm2 may not be on PATH in a non-login SSH shell; npx resolves it.
+            npx pm2 startOrReload ecosystem.config.js --env production
+            npx pm2 save
