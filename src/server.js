@@ -11,6 +11,7 @@ const shopifyRoutes = require('./routes/shopify');
 const productRoutes = require('./routes/products');
 const webhookRoutes = require('./routes/webhooks');
 const adminRoutes = require('./routes/admin');
+const legalRoutes = require('./routes/legal');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -73,6 +74,7 @@ app.use('/shopify', shopifyRoutes);
 app.use('/api', apiLimiter, productRoutes);
 app.use('/webhooks', webhookRoutes);
 app.use('/admin', adminRoutes);
+app.use('/', legalRoutes); // /privacy, /terms
 
 // 404
 app.use((req, res) => {
